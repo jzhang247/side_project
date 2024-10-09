@@ -20,6 +20,9 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+
+    implementation("org.mongodb:mongodb-driver-sync:4.3.4")
+
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
