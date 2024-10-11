@@ -1,4 +1,8 @@
 package notreallyagroup.backend.mrchd;
 
-public class AttributeTypes {
+public enum AttributeTypes {
+    SubCategory,
+    Float,
+    Integer,
+    String,
 }

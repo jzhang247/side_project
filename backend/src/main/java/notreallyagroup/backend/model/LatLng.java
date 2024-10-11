@@ -1,4 +1,4 @@
-package model;
+package notreallyagroup.backend.model;
 
 public record LatLng(
         float lat,

@@ -19,10 +19,20 @@ repositories {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-web")
+
+    implementation("com.google.code.gson:gson")
+
+    implementation("org.mindrot:jbcrypt:0.4")
+
+    implementation("org.mongodb:mongodb-driver-sync")
+    implementation("co.elastic.clients:elasticsearch-java:8.10.0")
+
+    implementation("javax.xml.bind:jaxb-api:2.3.1")
+    implementation("org.glassfish.jaxb:jaxb-runtime:2.3.1")
+    implementation("io.jsonwebtoken:jjwt:0.9.1")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-
-    implementation("org.mongodb:mongodb-driver-sync:4.3.4")
-
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
