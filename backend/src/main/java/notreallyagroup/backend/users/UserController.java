@@ -1,9 +1,10 @@
 package notreallyagroup.backend.users;
 
-
-import co.elastic.clients.elasticsearch.core.IndexResponse;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
+import java.io.IOException;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mongodb.MongoWriteException;
@@ -16,18 +17,12 @@ import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
 import notreallyagroup.backend.Constants;
 import notreallyagroup.backend.mrchd.CategoryManager;
-import notreallyagroup.backend.mrchd.MerchandiseInfo;
 import org.bson.Document;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import util.Utilities;
 
-import java.io.IOException;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.TimeZone;
+
 
 
 @RestController
@@ -48,6 +43,7 @@ public class UserController {
     public UserController(CategoryManager categoryManager, ElasticsearchRepository elasticsearchRepository) {
         this.categoryManager = categoryManager;
         this.elasticsearchRepository = elasticsearchRepository;
+
 
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
@@ -179,19 +175,19 @@ public class UserController {
                     Updates.set(NAME_MERCHANDISES + "." + newMerchandiseId,
                             Document.parse(jsonMerchandise.toString())));
 
-            IndexResponse response = elasticsearchRepository.client.index(i -> i
-                    .index(jsonMerchandise.get("category").getAsString()) // Index name
-                    .id(newMerchandiseId) // Document ID
-                    .document(jsonMerchandise.toString())   // Document body
-            );
+            String esrbody = jsonMerchandise.toString();
+            elasticsearchRepository.requestBlocking("POST","myindex/_doc/",esrbody);
 
-            if (updateResult.getMatchedCount() != 1) {
-                return ResponseEntity.status(400).body("Failed to add merchandise.");
-            }
+
 
             return ResponseEntity.ok("Added merchandise.");
         }
+//        catch(Exception ex){
+//            System.out.println(ex.getMessage());
+//            return ResponseEntity.status(500).body("Failed to add merchandise.");
+//        }
     }
+
 
     @GetMapping("list_merchandise_categories")
     protected ResponseEntity<String> listMerchandiseCategories() {
@@ -218,5 +214,6 @@ public class UserController {
             return ResponseEntity.ok(user.getDocument(NAME_MERCHANDISES).toJson());
         }
     }
+
 
 }
