@@ -5,6 +5,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mongodb.MongoWriteException;
@@ -23,19 +25,18 @@ import org.springframework.web.bind.annotation.*;
 import util.Utilities;
 
 
-
-
 @RestController
 public class UserController {
-    public final String NAME_COLLECTION_USER = "user_collection";
-    public final String NAME_COLLECTION_SESSION = "session_collection";
-    public final String NAME_USERNAME = "username";
-    public final String NAME_PASSWORD = "password";
-    public final String NAME_SESSION_ID = "session_id";
-    public final String NAME_TOKEN = "token";
-    public final String NAME_MERCHANDISE = "merchandise";
-    public final String NAME_ATTRIBUTE = "attribute";
-    public final String NAME_MERCHANDISES = "merchandises";
+    public final String KW_COLLECTION_USER = "user_collection";
+    public final String KW_COLLECTION_SESSION = "session_collection";
+    public final String KW_USERNAME = "username";
+    public final String KW_PASSWORD = "password";
+    public final String KW_SESSION_ID = "session_id";
+    public final String KW_PACK_TOKEN = "token";
+    public final String KW_PACK_MERCHANDISE = "merchandise";
+    public final String KW_MDB_MERCHANDISES = "merchandises";
+    public final String KW_ES_MERCHANDISE_OWNER = KW_USERNAME;
+    public final String KW_ES_MERCHANDISE_ID = "merchandise_id";
 
     CategoryManager categoryManager;
     ElasticsearchRepository elasticsearchRepository;
@@ -47,10 +48,10 @@ public class UserController {
 
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            boolean alreadyCreated = database.listCollectionNames().into(new ArrayList<>()).contains(NAME_COLLECTION_USER);
-            MongoCollection<Document> collection = database.getCollection(NAME_COLLECTION_USER);
+            boolean alreadyCreated = database.listCollectionNames().into(new ArrayList<>()).contains(KW_COLLECTION_USER);
+            MongoCollection<Document> collection = database.getCollection(KW_COLLECTION_USER);
             if (!alreadyCreated) {
-                collection.createIndex(Indexes.ascending(NAME_USERNAME), new IndexOptions().unique(true));
+                collection.createIndex(Indexes.ascending(KW_USERNAME), new IndexOptions().unique(true));
             }
         }
     }
@@ -63,14 +64,14 @@ public class UserController {
 
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            MongoCollection<Document> collection = database.getCollection(NAME_COLLECTION_USER);
+            MongoCollection<Document> collection = database.getCollection(KW_COLLECTION_USER);
 
 
             // Create a document
             Document document = new Document()
-                    .append(NAME_USERNAME, request.username)
-                    .append(NAME_PASSWORD, PasswordHasher.hashPassword(request.password))
-                    .append(NAME_MERCHANDISES, new Document());
+                    .append(KW_USERNAME, request.username)
+                    .append(KW_PASSWORD, PasswordHasher.hashPassword(request.password))
+                    .append(KW_MDB_MERCHANDISES, new Document());
 
             // Insert the document into the collection
             try {
@@ -94,16 +95,16 @@ public class UserController {
 
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            MongoCollection<Document> users = database.getCollection(NAME_COLLECTION_USER);
-            MongoCollection<Document> sessions = database.getCollection(NAME_COLLECTION_SESSION);
-            Document findUser = users.find(new Document(NAME_USERNAME, request.username)).first();
-            if (findUser == null || !PasswordHasher.checkPassword(request.password, findUser.getString(NAME_PASSWORD))) {
+            MongoCollection<Document> users = database.getCollection(KW_COLLECTION_USER);
+            MongoCollection<Document> sessions = database.getCollection(KW_COLLECTION_SESSION);
+            Document findUser = users.find(new Document(KW_USERNAME, request.username)).first();
+            if (findUser == null || !PasswordHasher.checkPassword(request.password, findUser.getString(KW_PASSWORD))) {
                 return ResponseEntity.status(400).body("Username or password is incorrect.");
             }
 
             String sessionId = request.username + ZonedDateTime.now(ZoneOffset.UTC);
 
-            Document document = new Document().append(NAME_SESSION_ID, sessionId).append(NAME_USERNAME, request.username);
+            Document document = new Document().append(KW_SESSION_ID, sessionId).append(KW_USERNAME, request.username);
 
             try {
                 var rslt = sessions.insertOne(document);
@@ -122,11 +123,11 @@ public class UserController {
     protected ResponseEntity<String> getToken(@RequestBody RequestBodyGetToken request) {
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            MongoCollection<Document> users = database.getCollection(NAME_COLLECTION_USER);
-            MongoCollection<Document> sessions = database.getCollection(NAME_COLLECTION_SESSION);
+            MongoCollection<Document> users = database.getCollection(KW_COLLECTION_USER);
+            MongoCollection<Document> sessions = database.getCollection(KW_COLLECTION_SESSION);
 
-            Document findUser = users.find(new Document(NAME_USERNAME, request.username)).first();
-            var findSession = sessions.find(new Document(NAME_SESSION_ID, request.sessionId)).first();
+            Document findUser = users.find(new Document(KW_USERNAME, request.username)).first();
+            var findSession = sessions.find(new Document(KW_SESSION_ID, request.sessionId)).first();
             if (findUser == null || findSession == null) {
                 return ResponseEntity.status(400).body("Invalid session. Please login.");
             }
@@ -158,34 +159,34 @@ public class UserController {
     protected ResponseEntity<String> addMerchandise(@RequestBody String requestText) throws IOException {
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            MongoCollection<Document> users = database.getCollection(NAME_COLLECTION_USER);
+            MongoCollection<Document> users = database.getCollection(KW_COLLECTION_USER);
 
             JsonParser jsonParser = new JsonParser();
             JsonObject jsonRequest = jsonParser.parse(requestText).getAsJsonObject();
 
-            var claims = TokenManager.validateToken(jsonRequest.get(NAME_TOKEN).getAsString());
+            var claims = TokenManager.validateToken(jsonRequest.get(KW_PACK_TOKEN).getAsString());
             if (claims == null) {
                 return ResponseEntity.status(400).body("Token invalid or expired.");
             }
-            String username = (String) claims.get(NAME_USERNAME);
-            var jsonMerchandise = jsonRequest.getAsJsonObject(NAME_MERCHANDISE);
-            String newMerchandiseId = Utilities.stringToHexString(ZonedDateTime.now(ZoneOffset.UTC).toString());
+            String username = (String) claims.get(KW_USERNAME);
+            var jsonMerchandise = jsonRequest.getAsJsonObject(KW_PACK_MERCHANDISE);
+            String newMerchandiseId = ZonedDateTime.now(ZoneOffset.UTC).toString();
             var updateResult = users.updateOne(
-                    new Document(NAME_USERNAME, username),
-                    Updates.set(NAME_MERCHANDISES + "." + newMerchandiseId,
+                    new Document(KW_USERNAME, username),
+                    Updates.set(KW_MDB_MERCHANDISES + "." + newMerchandiseId,
                             Document.parse(jsonMerchandise.toString())));
 
-            String esrbody = jsonMerchandise.toString();
-            elasticsearchRepository.requestBlocking("POST","myindex/_doc/",esrbody);
+            jsonMerchandise.addProperty(KW_ES_MERCHANDISE_OWNER, username);
+            jsonMerchandise.addProperty(KW_ES_MERCHANDISE_ID, newMerchandiseId);
 
+            elasticsearchRepository.requestBlocking("POST", "myindex/_doc/", jsonMerchandise.toString());
 
 
             return ResponseEntity.ok("Added merchandise.");
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+            return ResponseEntity.status(500).body("Failed to add merchandise.");
         }
-//        catch(Exception ex){
-//            System.out.println(ex.getMessage());
-//            return ResponseEntity.status(500).body("Failed to add merchandise.");
-//        }
     }
 
 
@@ -208,12 +209,36 @@ public class UserController {
 
         try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
             MongoDatabase database = mongoClient.getDatabase(Constants.MONGO_DB_DATABASE_NAME);
-            MongoCollection<Document> users = database.getCollection(NAME_COLLECTION_USER);
-            var user = users.find(new Document(NAME_USERNAME, username)).first().toBsonDocument();
+            MongoCollection<Document> users = database.getCollection(KW_COLLECTION_USER);
+            var user = users.find(new Document(KW_USERNAME, username)).first().toBsonDocument();
 
-            return ResponseEntity.ok(user.getDocument(NAME_MERCHANDISES).toJson());
+            return ResponseEntity.ok(user.getDocument(KW_MDB_MERCHANDISES).toJson());
         }
     }
 
+    @GetMapping("search_merchandise")
+    protected ResponseEntity<String> searchMerchandise(@RequestParam Map<String, String> filters) {
+        try {
+            JsonObject jsQuery = new JsonObject();
+            jsQuery.add("match_all", new JsonObject());
+            JsonObject jsBody = new JsonObject();
+            jsBody.add("query", jsQuery);
+            elasticsearchRepository.requestBlocking("GET", "myindex", jsBody.toString());
+            return ResponseEntity.ok("");
+        } catch (Exception ex) {
+            System.err.println(ex.getMessage());
+            return ResponseEntity.status(500).body("Failed to search merchandise.");
+        }
+    }
+
+
+    @GetMapping("echo")
+    protected ResponseEntity<String> echoGet(@RequestParam Map<String, String> params, @RequestBody String body) {
+        return ResponseEntity.ok("GET params: " + params + "; body: " + body);
+    }
+    @PostMapping("echo")
+    protected ResponseEntity<String> echoPost(@RequestParam Map<String, String> params, @RequestBody String body) {
+        return ResponseEntity.ok("Post params: " + params + "; body: " + body);
+    }
 
 }
