@@ -11,11 +11,8 @@ public class CategoryInfo {
 
     public CategoryInfo(String name) {
         this.name = name;
-
-        add(new AttributeInfo(AttributeTypes.String, "id"));
         add(new AttributeInfo(AttributeTypes.String, "title"));
         add(new AttributeInfo(AttributeTypes.String, "description"));
-        add(new AttributeInfo(AttributeTypes.String, "latlng"));
         add(new AttributeInfo(AttributeTypes.Float, "price"));
     }
 

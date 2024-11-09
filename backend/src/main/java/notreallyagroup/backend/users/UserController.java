@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -21,6 +22,7 @@ import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Updates;
 import notreallyagroup.backend.Constants;
+import notreallyagroup.backend.mrchd.AttributeTypes;
 import notreallyagroup.backend.mrchd.CategoryManager;
 import org.bson.Document;
 import org.springframework.http.ResponseEntity;
@@ -220,6 +222,7 @@ public class UserController {
             JsonParser jsonParser = new JsonParser();
             JsonObject jsonRequest = jsonParser.parse(requestText).getAsJsonObject();
 
+
             var claims = TokenManager.validateToken(jsonRequest.get(KW_PACK_TOKEN).getAsString());
             if (claims == null) {
                 return ResponseEntity.status(400).body("Token invalid or expired.");
@@ -251,12 +254,15 @@ public class UserController {
                 iterFilesEntry++;
             }
 
-            elasticsearchRepository.requestBlocking("POST", "myindex/_doc/", jsonMerchandise.toString());
+            var merchandiseCategory = jsonMerchandise.get("category").getAsString();
+
+            elasticsearchRepository.requestBlocking("POST", "index_" + merchandiseCategory + "/_doc/", jsonMerchandise.toString());
 
 
             return ResponseEntity.ok("Added merchandise.");
         } catch (Exception ex) {
-            System.out.println(ex.getMessage());
+//            System.out.println(ex.getMessage());
+            ex.printStackTrace();
             return ResponseEntity.status(500).body("Failed to add merchandise.");
         }
     }
@@ -298,17 +304,63 @@ public class UserController {
         }
     }
 
-    @GetMapping("search_merchandise")
+    @PostMapping("search_merchandise")
     protected ResponseEntity<String> searchMerchandise(@RequestBody String requestBody) {
         try {
+            var jsonRequestBody = JsonParser.parseString(requestBody).getAsJsonObject();
+            var categoryName = jsonRequestBody.get("category").getAsString();
+            var jsonFilters = jsonRequestBody.get("filters").getAsJsonArray();
+            var jsonMust = new JsonArray();
+            for (var filter : jsonFilters) {
+                var filterValue = filter.getAsJsonObject().get("value");
+                String attrName = filter.getAsJsonObject().get("name").getAsString();
+                var categoryInfo = categoryManager.categories.get(categoryName);
+                var attrInfo = categoryInfo.attributes.get(attrName);
+                if (attrInfo.type.equals(AttributeTypes.Float)) {
+                    var range = new JsonObject();
+                    var value = new JsonObject();
+                    var mustEntry = new JsonObject();
+                    var filterValueArr = filterValue.getAsJsonArray();
+                    if (!filterValueArr.get(0).isJsonNull()) {
+                        value.addProperty("gte", Integer.parseInt( filterValueArr.get(0).getAsString()));
+                    }
+                    if (!filterValueArr.get(1).isJsonNull()) {
+                        value.addProperty("lte", Integer.parseInt( filterValueArr.get(1).getAsString()));
+                    }
+                    range.add(attrName, value);
+                    mustEntry.add("range", range);
+                    jsonMust.add(mustEntry);
+
+                } else if (attrInfo.type.equals(AttributeTypes.String)) {
+                    var match = new JsonObject();
+                    match.add(attrName, filterValue);
+                    jsonMust.add(match);
+                }
+            }
+
+            System.out.println(jsonFilters);
+            JsonObject esRequest = new JsonObject();
             JsonObject jsQuery = new JsonObject();
-            jsQuery.add("match_all", new JsonObject());
-            JsonObject jsBody = new JsonObject();
-            jsBody.add("query", jsQuery);
-            elasticsearchRepository.requestBlocking("GET", "myindex", jsBody.toString());
-            return ResponseEntity.ok("");
+            JsonObject jsQueryBool = new JsonObject();
+            jsQueryBool.add("must", jsonMust);
+            jsQuery.add("bool", jsQueryBool);
+//            jsQuery.add("match_all", new JsonObject());
+            esRequest.add("query", jsQuery);
+            var searchResult = elasticsearchRepository.requestBlocking("GET", "index_" + categoryName + "/_search", esRequest.toString());
+            var listOfLinks = new JsonArray();
+            var jsonSearchResult = JsonParser.parseString(searchResult).getAsJsonObject();
+            {
+                var jsonHits = jsonSearchResult.get("hits").getAsJsonObject().get("hits").getAsJsonArray();
+                for (var hit : jsonHits) {
+                    var source = hit.getAsJsonObject().get("_source");
+                    listOfLinks.add(source);
+                }
+            }
+
+            return ResponseEntity.ok(listOfLinks.toString());
         } catch (Exception ex) {
-            System.err.println(ex.getMessage());
+            ex.printStackTrace();
+//            System.err.println(ex.getMessage());
             return ResponseEntity.status(500).body("Failed to search merchandise.");
         }
     }
@@ -343,6 +395,9 @@ public class UserController {
                 }
             };
             try {
+                for (var kv : categoryManager.categories.entrySet()) {
+                    runIgnoreException.accept(() -> elasticsearchRepository.requestBlocking("DELETE", "index_" + kv.getKey()));
+                }
                 runIgnoreException.accept(() -> elasticsearchRepository.requestBlocking("DELETE", "myindex"));
                 userFileStorageManager.deleteAll();
                 try (MongoClient mongoClient = MongoClients.create(Constants.MONGO_DB_CONNECTION)) {
@@ -360,5 +415,6 @@ public class UserController {
         }
 
     }
+
 
 }

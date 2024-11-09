@@ -23,6 +23,7 @@ dependencies {
 
     implementation("com.google.code.gson:gson")
     implementation("org.mongodb:mongodb-driver-sync")
+    implementation("com.google.cloud:google-cloud-storage:2.27.0")
 
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("io.jsonwebtoken:jjwt:0.9.1")
