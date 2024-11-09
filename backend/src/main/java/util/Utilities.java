@@ -12,4 +12,11 @@ public class Utilities {
     public static String stringToHexString(String s) {
         return byteArrayToHexString(s.getBytes());
     }
+
+    public static String tryGetFileExtension(String fileName) {
+        if (fileName == null)
+            return null;
+        var split = fileName.split("\\.");
+        return split.length > 1 ? split[split.length - 1] : "";
+    }
 }

@@ -40,13 +40,10 @@ public class ElasticsearchRepository {
             connection.getOutputStream().write(body.getBytes());
         }
 
-        StringBuilder response = getResponse(connection);
-
-        return response.toString();
-
+        return getResponse(connection);
     }
 
-    private static StringBuilder getResponse(HttpURLConnection connection) throws IOException {
+    private static String getResponse(HttpURLConnection connection) throws IOException {
         int responseCode = connection.getResponseCode();
 
         StringBuilder response = new StringBuilder();
@@ -59,7 +56,7 @@ public class ElasticsearchRepository {
                 throw new IOException("Failed : HTTP error code : " + responseCode + " : " + response);
             }
         }
-        return response;
+        return response.toString();
     }
 
 
